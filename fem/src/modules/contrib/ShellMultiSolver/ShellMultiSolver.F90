@@ -72,7 +72,7 @@
 
  
 ! ------------------------------------------------------
-   SUBROUTINE ShellSolver( Model,Solver,dt,TransientSimulation )
+   SUBROUTINE ShellSolver( Model, Solver, dt, TransientSimulation )
 ! -----------------------------------------------------------------
 ! *****************************************************
 !
@@ -95,6 +95,8 @@
 ! *******************************************************
 
      USE DefUtils
+!     USE ElementDescription
+     USE SolidMechanicsUtils
      IMPLICIT NONE
 ! --------------------------------------------------------------
      TYPE(Model_t) :: Model
@@ -102,13 +104,21 @@
  
      REAL(KIND=DP) :: dt
      LOGICAL :: TransientSimulation
+     LOGICAL :: DrillingDOFs !!! Added
+     REAL(KIND=dp), ALLOCATABLE :: LocalSol(:,:) !!! Added
+     REAL(KIND=dp), ALLOCATABLE :: LocalRHSForce(:) !!! Added
+     REAL(KIND=dp), POINTER CONTIG :: ValuesSaved(:) => NULL() !!! Added <--
+     INTEGER :: ShellModelPar !!! Added
+     INTEGER, POINTER :: Indices(:) => NULL() !!! Added
 
+     
+     TYPE(Mesh_t), POINTER :: Mesh !!! Added
      TYPE(Solver_t), POINTER :: PSolver
      TYPE(Matrix_t),POINTER  :: StiffMatrix
      TYPE(Nodes_t)   :: ElementNodes
-     TYPE(Element_t),POINTER :: CurrentElement
-
-     INTEGER :: i,j,k,n,t, bf_id, istat, LocalNodes, CalcSurf,nPL,iPL, NumberOfElementNodes
+     TYPE(Element_t),POINTER :: CurrentElement, BGElement !!! Added BGElement
+     
+     INTEGER :: i, j, k, n, nd, nb, t, bf_id, istat, LocalNodes, CalcSurf,nPL,iPL, NumberOfElementNodes
 
      REAL(KIND=DP) :: Norm,PrevNorm, PrevUNorm, Unorm, NonLinConvTol, &
          RelChange, RelUChange, NOFEigValsBackup, LoadScale
@@ -173,8 +183,9 @@
          UseSMITCelement,UseMITC3element, MembraneOnly, MembraneOnlyNRM,   &	
          TopSideStress, BottomSideStress, TotalStress, MembraneStress, BendingStress, OutNormal,&
          ObjectRadius,SimpleObject,UseRMITC3element
-! ==============================================================
+     SAVE Indices, LocalSol, LocalRHSForce !!! Added <--
 
+! ==============================================================
 
 !    Get variables needed for solution:
 !    ----------------------------------
@@ -196,6 +207,12 @@
       
 ! =========================================================
 
+     ! Added !!! -->
+     IF (.NOT. ALLOCATED(LocalSol)) ALLOCATE( LocalSol(ShellModelPar, Mesh % MaxElementDOFs) )
+     IF (.NOT. ALLOCATED(LocalRHSForce)) ALLOCATE( LocalRHSForce((ShellModelPar+1) * Mesh % MaxElementDOFs))
+     ! End added <-- !!!
+
+     
 !    Allocate some permanent storage, this is done first time only:
 !    --------------------------------------------------------------
      IF ( .NOT. AllocationsDone ) THEN
@@ -557,100 +574,241 @@
      SUBROUTINE BulkAssembly
 ! --------------------------------------------------------
        CALL StartAdvanceOutput('ShellSolve', 'Assembly:')
-       DO t=1,Solver % NumberOfActiveElements
+       DO t=1,Solver % NumberOfActiveElements !!! Aqui en el otro hay la variable ACtive. Trackear alli a ver...
+
+          CALL AdvanceOutput(t, Solver % NumberOfActiveElements)
+
+          CurrentElement => GetActiveElement( t )
+          n  = GetElementNOFNodes()
+          nd = GetElementDOFs(Indices)
+          nb = GetElementNOFBDOFs()
+          NodeIndexes => CurrentElement % NodeIndexes
+
+          LocalDeflection = 0.0d0
+          DO i = 1,n
+             k = DeflectionPerm(NodeIndexes(i))
+             DO j = 1,6
+                LocalDeflection(6*(i-1)+j) = Deflection(6*(k-1)+j)
+             END DO
+          END DO
+             
+          ! Plates go here:
+          ! --------------------------------------------------------------
+          IF( ( n == 3 ) .OR. ( n == 4 ) ) THEN 
+          
+             ! Active = GetNOFBoundaryElements
+             ! --------------------------------------------------------------
+             CALL GetElementNodes( ElementNodes )
+             
+             LoadN(1:n) = GetReal( SolverParams, 'Load Scale Factor', GotIt )
+             LoadScale = LoadN(1)
+             IF( .NOT. GotIt ) LoadScale = 1.0d0
+             
+             !      Nodal loads:
+             !      ------------
+             BodyForce => GetBodyForce()
+             
+             LoadVector = 0.0d0
+             
+             LoadX(1:n) = GetReal( BodyForce, 'Body Force 1', GotIt )
+             LoadY(1:n) = GetReal( BodyForce, 'Body Force 2', GotIt )
+             LoadZ(1:n) = GetReal( BodyForce, 'Body Force 3', GotIt )
+             LoadN(1:n) = GetReal( BodyForce, 'Pressure', GotIt )
+             LoadN(1:n) = LoadN(1:n) + GetReal( BodyForce, 'Normal Pressure', GotIt )
+             !      Material data:
+             !      --------------
+             !	******************************************************************************
+             !	(14.10.15) material data and thickness may be shifted to Body Force section
+             !	for more versatility (check feasibility)
+             !	******************************************************************************
+             Material => GetMaterial()
+         
+             Density(1:n) = GetReal( Material, 'Density', GotIt )
+             IF( .NOT.GotIt ) THEN
+                Density = 0.0d0
+                IF( TransientSimulation .OR. (Solver % NOfEigenvalues > 0)) &
+                     CALL Fatal( 'ShellSolver', 'Density required' )
+             END IF
+             
+             Poisson(1:n) = GetReal( Material, 'Poisson ratio', GotIt )
+             IF( Isotropic .AND. (.NOT.GotIt) ) &
+                  CALL Fatal( 'ShellSolver', 'Poisson ratio undefined' )
+             
+             Young(1:n) = GetReal( Material, 'Youngs modulus', GotIt )
+             IF( Isotropic .AND. (.NOT.GotIt) ) &
+                  CALL Fatal( 'ShellSolver', 'Youngs modulus undefined' )
+             !	Thickness shifted to Body force section and reading of it shifted to LocalMatrix 14.10.15
+             !       Thickness(1:n) = GetReal( Material, 'Thickness', GotIt )
+             !       IF( Isotropic .AND. (.NOT.GotIt) ) &
+             !                     CALL Fatal( 'ShellSolver', 'Thickness undefined' )
+             
+             Tension(1:n) = GetReal( Material, 'Tension', GotIt )
+             IF( .NOT. GotIt ) Tension = 0.0d0
+             
+             CALL LocalMatrix(  STIFF, DAMP, MASS, &
+                  FORCE, LoadX, LoadY, LoadZ, LoadN, CurrentElement, n, &
+                  ElementNodes, StabParam1, StabParam2, t, Poisson,     &
+                  Young, LocalDeflection, LargeDeflection,  &
+                  StabilityAnalysis, Nvector,TT,ThLoad )
+             
+             IF( TransientSimulation ) THEN	
+                CALL Default2ndOrderTime( MASS, DAMP, STIFF, FORCE )	
+             END IF
+             !      Update global matrix and rhs vector from local matrix & vector:
+             !      ---------------------------------------------------------------
+             CALL DefaultUpdateEquations( STIFF, FORCE )
+             IF ( Solver % NOFEigenValues > 0 ) &
+                CALL DefaultUpdateMass( MASS )
+
+          ! Beams go here!
+          ELSE IF ( n == 2 .AND. nd == 2) THEN
+             BGElement => GetActiveElement(t) !!! k <-- t
+             
+             IF ( .NOT. (GetElementFamily(BGElement) == 2) ) CYCLE
+             
+             !----------------------------------------------------------------------
+             ! We assume that p-element definitions are not empoyed and hard-code
+             ! the bubble count:
+             !----------------------------------------------------------------------
+             !nb = 1
+             !IF (.NOT.(n == 2 .AND. nd == 2)) CALL Fatal('ShellSolver', &
+             !    'An unsupported 1-D element type or definition')
+
+             IF (LargeDeflection) THEN
+               CALL GetVectorLocalSolution(LocalSol, USolver=Solver)
+             ELSE
+               LocalSol = 0.0d0
+             END IF
+
+             IF (DrillingDOFs) THEN
+               CALL Warn('ShellSolver', 'Drilling DOFs does not yet support beam sections')
+               CYCLE
+             END IF
+
+             CALL BeamStiffnessMatrix(BGElement, n, nd+nb, nb, TransientSimulation, .FALSE., &
+                  .FALSE., LargeDeflection, LocalSol, LocalRHSForce, .TRUE.)
+             
+             IF (LargeDeflection .AND. NonlinIter == 1) THEN
+                ! ---------------------------------------------------------------------------
+                ! Create a RHS vector which contains just the contribution of external loads
+                ! for the purpose of nonlinear error estimation:
+                ! ---------------------------------------------------------------------------
+                ValuesSaved => Solver % Matrix % RHS
+                Solver % Matrix % RHS => Solver % Matrix % BulkRHS
+                CALL DefaultUpdateForce(LocalRHSForce)
+                Solver % Matrix % RHS => ValuesSaved
+             END IF
+             
+          ELSE
+             CALL Fatal( 'ShellSolver', 'Illegal number of nodes. Aborting.' )
+          END IF
+       END DO
+       
+! -------------------------------------------------------------
+    END SUBROUTINE BulkAssembly
+! -------------------------------------------------------------
+
+
+! THIS IS THE OLD ONE below !! 
+! -------------------------------------------------------------
+!     SUBROUTINE BulkAssembly
+! --------------------------------------------------------
+!       CALL StartAdvanceOutput('ShellSolve', 'Assembly:')
+!       DO t=1,Solver % NumberOfActiveElements
 ! --------------------------------------------------------------
          
-         CALL AdvanceOutput(t,Solver % NumberOFActiveElements)
-         
+!         CALL AdvanceOutput(t,Solver % NumberOFActiveElements)
+
 ! ----------------------------------------------------------
-         CurrentElement => GetActiveElement( t )
-         n = GetElementNOFNodes()
-         NodeIndexes => CurrentElement % NodeIndexes
+!         CurrentElement => GetActiveElement( t )
+!         n = GetElementNOFNodes()
+!         NodeIndexes => CurrentElement % NodeIndexes
          
-         LocalDeflection = 0.0d0
-         DO i = 1,n
-           k = DeflectionPerm(NodeIndexes(i))
-           DO j = 1,6
-             LocalDeflection(6*(i-1)+j) = Deflection(6*(k-1)+j)
-           END DO
-         END DO
+!         LocalDeflection = 0.0d0
+!         DO i = 1,n
+!           k = DeflectionPerm(NodeIndexes(i))
+!           DO j = 1,6
+!             LocalDeflection(6*(i-1)+j) = Deflection(6*(k-1)+j)
+!           END DO
+!         END DO
          
 !      Check element type:
 !      -------------------
-         IF( .NOT.( ( n == 3 ) .OR. ( n == 4 ) ) ) THEN
-           CALL Fatal( 'ShellSolver', 'Illegal number of nodes. Aborting.' )
-         END IF
+!         IF( .NOT.( ( n == 3 ) .OR. ( n == 4 ) ) ) THEN
+!           CALL Fatal( 'ShellSolver', 'Illegal number of nodes. Aborting.' )
+!         END IF
          
-         CALL GetElementNodes( ElementNodes )
+!         CALL GetElementNodes( ElementNodes )
          
-         LoadN(1:n) = GetReal( SolverParams, 'Load Scale Factor', GotIt )
-         LoadScale = LoadN(1)
-         IF( .NOT. GotIt ) LoadScale = 1.0d0
+!         LoadN(1:n) = GetReal( SolverParams, 'Load Scale Factor', GotIt )
+!         LoadScale = LoadN(1)
+!         IF( .NOT. GotIt ) LoadScale = 1.0d0
 
 !      Nodal loads:
 !      ------------
-         BodyForce => GetBodyForce()
+!         BodyForce => GetBodyForce()
          
-         LoadVector = 0.0d0
+!         LoadVector = 0.0d0
          
-         LoadX(1:n) = GetReal( BodyForce, 'Body Force 1', GotIt )
-         LoadY(1:n) = GetReal( BodyForce, 'Body Force 2', GotIt )
-         LoadZ(1:n) = GetReal( BodyForce, 'Body Force 3', GotIt )
-         LoadN(1:n) = GetReal( BodyForce, 'Pressure', GotIt )
-         LoadN(1:n) = LoadN(1:n) + GetReal( BodyForce, 'Normal Pressure', GotIt )
+!         LoadX(1:n) = GetReal( BodyForce, 'Body Force 1', GotIt )
+!         LoadY(1:n) = GetReal( BodyForce, 'Body Force 2', GotIt )
+!         LoadZ(1:n) = GetReal( BodyForce, 'Body Force 3', GotIt )
+!         LoadN(1:n) = GetReal( BodyForce, 'Pressure', GotIt )
+!         LoadN(1:n) = LoadN(1:n) + GetReal( BodyForce, 'Normal Pressure', GotIt )
 !      Material data:
 !      --------------
 !	******************************************************************************
 !	(14.10.15) material data and thickness may be shifted to Body Force section
 !	for more versatility (check feasibility)
 !	******************************************************************************
-         Material => GetMaterial()
+!         Material => GetMaterial()
          
-         Density(1:n) = GetReal( Material, 'Density', GotIt )
-         IF( .NOT.GotIt ) THEN
-           Density = 0.0d0
-           IF( TransientSimulation .OR. (Solver % NOfEigenvalues > 0)) &
-               CALL Fatal( 'ShellSolver', 'Density required' )
-         END IF
+!         Density(1:n) = GetReal( Material, 'Density', GotIt )
+!         IF( .NOT.GotIt ) THEN
+!           Density = 0.0d0
+!           IF( TransientSimulation .OR. (Solver % NOfEigenvalues > 0)) &
+!               CALL Fatal( 'ShellSolver', 'Density required' )
+!         END IF
          
-         Poisson(1:n) = GetReal( Material, 'Poisson ratio', GotIt )
-         IF( Isotropic .AND. (.NOT.GotIt) ) &
-             CALL Fatal( 'ShellSolver', 'Poisson ratio undefined' )
+!         Poisson(1:n) = GetReal( Material, 'Poisson ratio', GotIt )
+!         IF( Isotropic .AND. (.NOT.GotIt) ) &
+!             CALL Fatal( 'ShellSolver', 'Poisson ratio undefined' )
          
-         Young(1:n) = GetReal( Material, 'Youngs modulus', GotIt )
-         IF( Isotropic .AND. (.NOT.GotIt) ) &
-             CALL Fatal( 'ShellSolver', 'Youngs modulus undefined' )
+!         Young(1:n) = GetReal( Material, 'Youngs modulus', GotIt )
+!         IF( Isotropic .AND. (.NOT.GotIt) ) &
+!             CALL Fatal( 'ShellSolver', 'Youngs modulus undefined' )
          !	Thickness shifted to Body force section and reading of it shifted to LocalMatrix 14.10.15
          !       Thickness(1:n) = GetReal( Material, 'Thickness', GotIt )
          !       IF( Isotropic .AND. (.NOT.GotIt) ) &
          !                     CALL Fatal( 'ShellSolver', 'Thickness undefined' )
          
-         Tension(1:n) = GetReal( Material, 'Tension', GotIt )
-         IF( .NOT. GotIt ) Tension = 0.0d0
+!         Tension(1:n) = GetReal( Material, 'Tension', GotIt )
+!         IF( .NOT. GotIt ) Tension = 0.0d0
          
-         CALL LocalMatrix(  STIFF, DAMP, MASS, &
-             FORCE, LoadX, LoadY, LoadZ, LoadN, CurrentElement, n, &
-             ElementNodes, StabParam1, StabParam2, t, Poisson,     &
-             Young, LocalDeflection, LargeDeflection,  &
-             StabilityAnalysis, Nvector,TT,ThLoad )
+!         CALL LocalMatrix(  STIFF, DAMP, MASS, &
+!             FORCE, LoadX, LoadY, LoadZ, LoadN, CurrentElement, n, &
+!             ElementNodes, StabParam1, StabParam2, t, Poisson,     &
+!             Young, LocalDeflection, LargeDeflection,  &
+!             StabilityAnalysis, Nvector,TT,ThLoad )
          
-         IF( TransientSimulation ) THEN	
-           CALL Default2ndOrderTime( MASS, DAMP, STIFF, FORCE )	
-         END IF
+!         IF( TransientSimulation ) THEN	
+!           CALL Default2ndOrderTime( MASS, DAMP, STIFF, FORCE )	
+!         END IF
 !      Update global matrix and rhs vector from local matrix & vector:
 !      ---------------------------------------------------------------
-         CALL DefaultUpdateEquations( STIFF, FORCE )
-         IF ( Solver % NOFEigenValues > 0 ) &
-             CALL DefaultUpdateMass( MASS )
-       END DO
-! -----------------------------------------------------------------
-    END SUBROUTINE BulkAssembly
-! ----------------------------------------------------------------
-
+!         CALL DefaultUpdateEquations( STIFF, FORCE )
+!         IF ( Solver % NOFEigenValues > 0 ) &
+!             CALL DefaultUpdateMass( MASS )
+!       END DO
+! -------------------------------------------------------------
+!    END SUBROUTINE BulkAssembly
+! -------------------------------------------------------------
+! This WAS THE OLD ONE ^^
+    
 
 ! -------------------------------------------------------------
     SUBROUTINE BCAssembly()
-! -----------------------------------------------------------------
+! -------------------------------------------------------------
       NumberOfElementNodes = n
 !     Neumann & Newton boundary conditions:
 !     -------------------------------------
@@ -2687,35 +2845,35 @@
 
 
 ! -----------------------------------------------------------       
-     SUBROUTINE IsotropicElasticity(Ematrix, &
-         Gmatrix,Poisson,Young,Thickness,Basis,n)
+!     SUBROUTINE IsotropicElasticity(Ematrix, &
+!         Gmatrix,Poisson,Young,Thickness,Basis,n)
 ! -------------------------------------------------------------
-       REAL(KIND=dp) :: Ematrix(:,:), Gmatrix(:,:), Basis(:)
-       REAL(KIND=dp) :: Poisson(:), Young(:), Thickness(:)
-       REAL(KIND=dp) :: Euvw, Puvw, Guvw, Tuvw
-       INTEGER :: n
-       ! ------------------------------------------------------------------
-       Euvw = SUM( Young(1:n)    * Basis(1:n) )
+!       REAL(KIND=dp) :: Ematrix(:,:), Gmatrix(:,:), Basis(:)
+!       REAL(KIND=dp) :: Poisson(:), Young(:), Thickness(:)
+!       REAL(KIND=dp) :: Euvw, Puvw, Guvw, Tuvw
+!       INTEGER :: n
+!       ! ------------------------------------------------------------------
+!       Euvw = SUM( Young(1:n)    * Basis(1:n) )
 !	**********************Inserted on 4.11.14*************************
 !	if(MembraneOnly)Euvw=Euvw*0.2
 !	**********************Insertion 4.11.14 ends***********************
-       Puvw = SUM( Poisson(1:n)  * Basis(1:n) )
-       Tuvw = SUM( Thickness(1:n)* Basis(1:n) )
-       Guvw = Euvw/(2.0d0*(1.0d0 + Puvw))
-       
-       Ematrix = 0.0d0
-       Ematrix(1,1) = 1.0d0
-       Ematrix(1,2) = Puvw
-       Ematrix(2,1) = Puvw
-       Ematrix(2,2) = 1.0d0
-       Ematrix(3,3) = (1.0d0-Puvw)/2.0d0
-       Ematrix = Ematrix * Euvw * (Tuvw**3) / (12.0d0 * (1.0d0 -  Puvw*Puvw))
-
-       Gmatrix = 0.0d0
-       Gmatrix(1,1) = Guvw*Tuvw
-       Gmatrix(2,2) = Guvw*Tuvw
+!       Puvw = SUM( Poisson(1:n)  * Basis(1:n) )
+!       Tuvw = SUM( Thickness(1:n)* Basis(1:n) )
+!       Guvw = Euvw/(2.0d0*(1.0d0 + Puvw))
+!       
+!       Ematrix = 0.0d0
+!       Ematrix(1,1) = 1.0d0
+!       Ematrix(1,2) = Puvw
+!       Ematrix(2,1) = Puvw
+!       Ematrix(2,2) = 1.0d0
+!       Ematrix(3,3) = (1.0d0-Puvw)/2.0d0
+!       Ematrix = Ematrix * Euvw * (Tuvw**3) / (12.0d0 * (1.0d0 -  Puvw*Puvw))
+!
+!       Gmatrix = 0.0d0
+!       Gmatrix(1,1) = Guvw*Tuvw
+!       Gmatrix(2,2) = Guvw*Tuvw
 ! -----------------------------------------------------------------
-     END SUBROUTINE IsotropicElasticity
+!     END SUBROUTINE IsotropicElasticity
 !  ---------------------------------------------------------
 
 !  ===================================================================
@@ -2748,51 +2906,51 @@
 ! ==================================================================
 
 ! ------------------------------------------------------------
-     SUBROUTINE ShearCorrectionFactor(Kappa,Thickness,x,y,n,StabParam)
+!     SUBROUTINE ShearCorrectionFactor(Kappa,Thickness,x,y,n,StabParam)
 ! ------------------------------------------------------------
-       REAL(KIND=dp) :: Kappa,Thickness,x(:),y(:),StabParam
-       INTEGER :: n
+!       REAL(KIND=dp) :: Kappa,Thickness,x(:),y(:),StabParam
+!       INTEGER :: n
 ! ---------------------------------------------------------------
-       REAL(KIND=dp) :: x21,x32,x43,x13,x14,y21,y32,y43,y13,y14, &
-           l21,l32,l43,l13,l14,alpha,h
+!       REAL(KIND=dp) :: x21,x32,x43,x13,x14,y21,y32,y43,y13,y14, &
+!           l21,l32,l43,l13,l14,alpha,h
 ! -----------------------------------------------------------------
-       Kappa = 1.0d0
-       SELECT CASE(n)
-       CASE(3)
-         alpha = 0.20d0 * StabParam
-         x21 = x(2)-x(1)
-         x32 = x(3)-x(2)
-         x13 = x(1)-x(1)
-         y21 = y(2)-y(1)
-         y32 = y(3)-y(2)
-         y13 = y(1)-y(1)
-         l21 = SQRT(x21**2 + y21**2)
-         l32 = SQRT(x32**2 + y32**2)
-         l13 = SQRT(x13**2 + y13**2)
-         h = MAX(l21,l32,l13)
-         Kappa = (Thickness**2)/(Thickness**2 + alpha*(h**2))
-       CASE(4)
-         alpha = 0.10d0 * StabParam
-         x21 = x(2)-x(1)
-         x32 = x(3)-x(2)
-         x43 = x(4)-x(3)
-         x14 = x(1)-x(4)
-         y21 = y(2)-y(1)
-         y32 = y(3)-y(2)
-         y43 = y(4)-y(3)
-         y14 = y(1)-y(4)
-         l21 = SQRT(x21**2 + y21**2)
-         l32 = SQRT(x32**2 + y32**2)
-         l43 = SQRT(x43**2 + y43**2)
-         l14 = SQRT(x14**2 + y14**2)
-         h = MAX(l21,l32,l43,l14)
-         Kappa = (Thickness**2)/(Thickness**2 + alpha*(h**2))
-       CASE DEFAULT
-         CALL Fatal('ShellSolver',&
-             'Illegal number of nodes for Smitc elements')
-       END SELECT
-       ! -----------------------------------------------------------------
-     END SUBROUTINE ShearCorrectionFactor
+!       Kappa = 1.0d0
+!       SELECT CASE(n)
+!       CASE(3)
+!         alpha = 0.20d0 * StabParam
+!         x21 = x(2)-x(1)
+!         x32 = x(3)-x(2)
+!         x13 = x(1)-x(1)
+!         y21 = y(2)-y(1)
+!         y32 = y(3)-y(2)
+!         y13 = y(1)-y(1)
+!         l21 = SQRT(x21**2 + y21**2)
+!         l32 = SQRT(x32**2 + y32**2)
+!         l13 = SQRT(x13**2 + y13**2)
+!         h = MAX(l21,l32,l13)
+!         Kappa = (Thickness**2)/(Thickness**2 + alpha*(h**2))
+!       CASE(4)
+!         alpha = 0.10d0 * StabParam
+!         x21 = x(2)-x(1)
+!         x32 = x(3)-x(2)
+!         x43 = x(4)-x(3)
+!         x14 = x(1)-x(4)
+!         y21 = y(2)-y(1)
+!         y32 = y(3)-y(2)
+!         y43 = y(4)-y(3)
+!         y14 = y(1)-y(4)
+!         l21 = SQRT(x21**2 + y21**2)
+!         l32 = SQRT(x32**2 + y32**2)
+!         l43 = SQRT(x43**2 + y43**2)
+!         l14 = SQRT(x14**2 + y14**2)
+!         h = MAX(l21,l32,l43,l14)
+!         Kappa = (Thickness**2)/(Thickness**2 + alpha*(h**2))
+!       CASE DEFAULT
+!         CALL Fatal('ShellSolver',&
+!             'Illegal number of nodes for Smitc elements')
+!       END SELECT
+!       ! -----------------------------------------------------------------
+!     END SUBROUTINE ShearCorrectionFactor
 ! --------------------------------------------------------------
 
 !  ====================================================================
@@ -3033,60 +3191,60 @@
 ! ===================================================================
 
 ! -------------------------------------------------------------------
-     SUBROUTINE Jacobi3(Jmat,invJ,detJ,x,y)
-       ! ---------------------------------------------------------------
-       REAL(KIND=dp) :: Jmat(:,:),invJ(:,:),detJ,x(:),y(:)
-       ! -------------------------------------------------------------------
-       Jmat(1,1) = x(2)-x(1)
-       Jmat(2,1) = x(3)-x(1)
-       Jmat(1,2) = y(2)-y(1)
-       Jmat(2,2) = y(3)-y(1)
-
-       detJ = Jmat(1,1)*Jmat(2,2)-Jmat(1,2)*Jmat(2,1)
-
-       invJ(1,1) =  Jmat(2,2)/detJ
-       invJ(2,2) =  Jmat(1,1)/detJ
-       invJ(1,2) = -Jmat(1,2)/detJ
-       invJ(2,1) = -Jmat(2,1)/detJ
-       ! ------------------------------------------------------------------
-     END SUBROUTINE Jacobi3
+!     SUBROUTINE Jacobi3(Jmat,invJ,detJ,x,y)
+!       ! ---------------------------------------------------------------
+!       REAL(KIND=dp) :: Jmat(:,:),invJ(:,:),detJ,x(:),y(:)
+!       ! -------------------------------------------------------------------
+!       Jmat(1,1) = x(2)-x(1)
+!       Jmat(2,1) = x(3)-x(1)
+!       Jmat(1,2) = y(2)-y(1)
+!       Jmat(2,2) = y(3)-y(1)
+!
+!       detJ = Jmat(1,1)*Jmat(2,2)-Jmat(1,2)*Jmat(2,1)
+!
+!       invJ(1,1) =  Jmat(2,2)/detJ
+!       invJ(2,2) =  Jmat(1,1)/detJ
+!       invJ(1,2) = -Jmat(1,2)/detJ
+!       invJ(2,1) = -Jmat(2,1)/detJ
+!       ! ------------------------------------------------------------------
+!     END SUBROUTINE Jacobi3
 ! -------------------------------------------------------------------
 
 ! =====================================================================
 
 ! --------------------------------------------------------------------
-     SUBROUTINE Jacobi4(Jmat,invJ,detJ,xi,eta,x,y)
+!     SUBROUTINE Jacobi4(Jmat,invJ,detJ,xi,eta,x,y)
 ! --------------------------------------------------------------------
-       REAL(KIND=dp) :: Jmat(:,:),invJ(:,:),detJ,xi,eta,x(:),y(:)
-! ------------------------------------------------------------------
-       REAL(KIND=dp) :: dNdxi(4), dNdeta(4)
-       INTEGER :: i
-       
-       dNdxi(1) = -(1-eta)/4.0d0
-       dNdxi(2) =  (1-eta)/4.0d0
-       dNdxi(3) =  (1+eta)/4.0d0
-       dNdxi(4) = -(1+eta)/4.0d0
-       dNdeta(1) = -(1-xi)/4.0d0
-       dNdeta(2) = -(1+xi)/4.0d0
-       dNdeta(3) =  (1+xi)/4.0d0
-       dNdeta(4) =  (1-xi)/4.0d0
-
-       Jmat = 0.0d0
-       DO i=1,4
-         Jmat(1,1) = Jmat(1,1) + dNdxi(i)*x(i)
-         Jmat(1,2) = Jmat(1,2) + dNdxi(i)*y(i)
-         Jmat(2,1) = Jmat(2,1) + dNdeta(i)*x(i)
-         Jmat(2,2) = Jmat(2,2) + dNdeta(i)*y(i)
-       END DO
-
-       detJ = Jmat(1,1)*Jmat(2,2)-Jmat(1,2)*Jmat(2,1)
-
-       invJ(1,1) = Jmat(2,2)/detJ
-       invJ(2,2) = Jmat(1,1)/detJ
-       invJ(1,2) = -Jmat(1,2)/detJ
-       invJ(2,1) = -Jmat(2,1)/detJ
-       ! --------------------------------------------------------------------
-     END SUBROUTINE Jacobi4
+!       REAL(KIND=dp) :: Jmat(:,:),invJ(:,:),detJ,xi,eta,x(:),y(:)
+!! ------------------------------------------------------------------
+!       REAL(KIND=dp) :: dNdxi(4), dNdeta(4)
+!       INTEGER :: i
+!       
+!       dNdxi(1) = -(1-eta)/4.0d0
+!       dNdxi(2) =  (1-eta)/4.0d0
+!       dNdxi(3) =  (1+eta)/4.0d0
+!       dNdxi(4) = -(1+eta)/4.0d0
+!       dNdeta(1) = -(1-xi)/4.0d0
+!       dNdeta(2) = -(1+xi)/4.0d0
+!       dNdeta(3) =  (1+xi)/4.0d0
+!       dNdeta(4) =  (1-xi)/4.0d0
+!
+!       Jmat = 0.0d0
+!       DO i=1,4
+!         Jmat(1,1) = Jmat(1,1) + dNdxi(i)*x(i)
+!         Jmat(1,2) = Jmat(1,2) + dNdxi(i)*y(i)
+!         Jmat(2,1) = Jmat(2,1) + dNdeta(i)*x(i)
+!         Jmat(2,2) = Jmat(2,2) + dNdeta(i)*y(i)
+!       END DO
+!
+!       detJ = Jmat(1,1)*Jmat(2,2)-Jmat(1,2)*Jmat(2,1)
+!
+!       invJ(1,1) = Jmat(2,2)/detJ
+!       invJ(2,2) = Jmat(1,1)/detJ
+!       invJ(1,2) = -Jmat(1,2)/detJ
+!       invJ(2,1) = -Jmat(2,1)/detJ
+!       ! --------------------------------------------------------------------
+!     END SUBROUTINE Jacobi4
 ! -----------------------------------------------------------------
 
      SUBROUTINE GetAnisoParameter(Aniso,Point1,Point2,alfa,Te,IniBen2)	!Inserted on 14.11.13
@@ -3095,7 +3253,7 @@
        CHARACTER(LEN=15) :: Aniso	
        !	Real(kind=dp), pointer ::	IniBen(:,:) !IniBen(:,:) inserted on 24.9.15
        REAL(Kind=dp) :: Point1(3), Point2(3),Te,alfa(2), IniBen2(2) !IniBen2 added 29.9.15
-       LOGICAL Found,Found1,Found2,Found3,Found4,Found5,Found6,WeldSimu
+       LOGICAL Found, Found1, Found2, Found3, Found4, Found5, Found6, WeldSimu
 
        Aniso =GetString( BodyForce, 'Thermal Anisotropy', Found)
        IF (Found) THEN
