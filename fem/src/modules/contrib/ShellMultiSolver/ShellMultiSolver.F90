@@ -116,7 +116,8 @@
      TYPE(Nodes_t)   :: ElementNodes
      TYPE(Element_t),POINTER :: CurrentElement
      
-     INTEGER :: i, j, k, n, nd, nb, t, bf_id, istat, LocalNodes, CalcSurf,nPL,iPL, NumberOfElementNodes
+     INTEGER :: i,j,k,n,nd,nb, t, bf_id, istat, LocalNodes, CalcSurf,nPL,iPL, &
+         NumberOfElementNodes
 
      REAL(KIND=DP) :: Norm,PrevNorm, PrevUNorm, Unorm, NonLinConvTol, &
          RelChange, RelUChange, NOFEigValsBackup, LoadScale
