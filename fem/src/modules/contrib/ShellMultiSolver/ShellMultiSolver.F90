@@ -107,7 +107,6 @@
      REAL(KIND=dp), ALLOCATABLE :: LocalSol(:,:) !!! Added
      REAL(KIND=dp), ALLOCATABLE :: LocalRHSForce(:) !!! Added
      REAL(KIND=dp), POINTER CONTIG :: ValuesSaved(:) => NULL() !!! Added <--
-     INTEGER :: ShellModelPar !!! Added
      INTEGER, POINTER :: Indices(:) => NULL() !!! Added
 
      
@@ -207,8 +206,8 @@
 ! =========================================================
 
      ! Added !!! -->
-     IF (.NOT. ALLOCATED(LocalSol)) ALLOCATE( LocalSol(ShellModelPar, Mesh % MaxElementDOFs) )
-     IF (.NOT. ALLOCATED(LocalRHSForce)) ALLOCATE( LocalRHSForce((ShellModelPar+1) * Mesh % MaxElementDOFs))
+     IF (.NOT. ALLOCATED(LocalSol)) ALLOCATE( LocalSol(6, Mesh % MaxElementDOFs) )
+     IF (.NOT. ALLOCATED(LocalRHSForce)) ALLOCATE( LocalRHSForce((6+1) * Mesh % MaxElementDOFs))
      ! End added <-- !!!
 
      
