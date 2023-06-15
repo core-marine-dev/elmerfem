@@ -104,7 +104,6 @@
  
      REAL(KIND=DP) :: dt
      LOGICAL :: TransientSimulation
-     LOGICAL :: DrillingDOFs !!! Added
      REAL(KIND=dp), ALLOCATABLE :: LocalSol(:,:) !!! Added
      REAL(KIND=dp), ALLOCATABLE :: LocalRHSForce(:) !!! Added
      REAL(KIND=dp), POINTER CONTIG :: ValuesSaved(:) => NULL() !!! Added <--
@@ -676,11 +675,6 @@
                CALL GetVectorLocalSolution(LocalSol, USolver=Solver)
              ELSE
                LocalSol = 0.0d0
-             END IF
-
-             IF (DrillingDOFs) THEN
-               CALL Warn('ShellSolver', 'Drilling DOFs does not yet support beam sections')
-               CYCLE
              END IF
 
              CALL BeamStiffnessMatrix(CurrentElement, n, nd+nb, nb, TransientSimulation, .FALSE., &
