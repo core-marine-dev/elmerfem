@@ -206,6 +206,7 @@
 ! =========================================================
 
      ! Added !!! -->
+     IF (.NOT. ASSOCIATED(Indices)) ALLOCATE( Indices(Mesh % MaxElementDOFs) )
      IF (.NOT. ALLOCATED(LocalSol)) ALLOCATE( LocalSol(6, Mesh % MaxElementDOFs) )
      IF (.NOT. ALLOCATED(LocalRHSForce)) ALLOCATE( LocalRHSForce((6+1) * Mesh % MaxElementDOFs))
      ! End added <-- !!!
