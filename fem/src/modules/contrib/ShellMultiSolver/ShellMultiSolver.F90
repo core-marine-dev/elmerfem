@@ -110,7 +110,6 @@
      INTEGER, POINTER :: Indices(:) => NULL() !!! Added
 
      
-     TYPE(Mesh_t), POINTER :: Mesh !!! Added
      TYPE(Solver_t), POINTER :: PSolver
      TYPE(Matrix_t),POINTER  :: StiffMatrix
      TYPE(Nodes_t)   :: ElementNodes
@@ -206,19 +205,15 @@
       
 ! =========================================================
 
-     ! Added !!! -->
-     IF (.NOT. ASSOCIATED(Indices)) ALLOCATE( Indices(Mesh % MaxElementDOFs) )
-     IF (.NOT. ALLOCATED(LocalSol)) ALLOCATE( LocalSol(6, Mesh % MaxElementDOFs) )
-     IF (.NOT. ALLOCATED(LocalRHSForce)) ALLOCATE( LocalRHSForce((6+1) * Mesh % MaxElementDOFs))
-     ! End added <-- !!!
-
-     
 !    Allocate some permanent storage, this is done first time only:
 !    --------------------------------------------------------------
      IF ( .NOT. AllocationsDone ) THEN
        N = Model % MaxElementNodes
        
-       ALLOCATE( ElementNodes % x( N ),   &
+       ALLOCATE( Indices(Solver % Mesh % MaxElementDOFs),   &
+           LocalSol(6, Solver % Mesh % MaxElementDOFs),   &
+           LocalRHSForce((6+1) * Solver % Mesh % MaxElementDOFs),   &
+           ElementNodes % x( N ),   &
            ElementNodes % y( N ),   &
            ElementNodes % z( N ),   &
            FORCE( 6*N ), &
