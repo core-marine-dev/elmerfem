@@ -116,7 +116,7 @@
      TYPE(Solver_t), POINTER :: PSolver
      TYPE(Matrix_t),POINTER  :: StiffMatrix
      TYPE(Nodes_t)   :: ElementNodes
-     TYPE(Element_t),POINTER :: CurrentElement, BGElement !!! Added BGElement
+     TYPE(Element_t),POINTER :: CurrentElement
      
      INTEGER :: i, j, k, n, nd, nb, t, bf_id, istat, LocalNodes, CalcSurf,nPL,iPL, NumberOfElementNodes
 
@@ -662,9 +662,7 @@
 
           ! Beams go here!
           ELSE IF ( n == 2 .AND. nd == 2) THEN
-             BGElement => GetActiveElement(t) !!! k <-- t
-             
-             IF ( .NOT. (GetElementFamily(BGElement) == 2) ) CYCLE
+             IF ( .NOT. (GetElementFamily(CurrentElement) == 2) ) CYCLE
              
              !----------------------------------------------------------------------
              ! We assume that p-element definitions are not empoyed and hard-code
@@ -685,7 +683,7 @@
                CYCLE
              END IF
 
-             CALL BeamStiffnessMatrix(BGElement, n, nd+nb, nb, TransientSimulation, .FALSE., &
+             CALL BeamStiffnessMatrix(CurrentElement, n, nd+nb, nb, TransientSimulation, .FALSE., &
                   .FALSE., LargeDeflection, LocalSol, LocalRHSForce, .TRUE.)
              
              IF (LargeDeflection .AND. NonlinIter == 1) THEN
