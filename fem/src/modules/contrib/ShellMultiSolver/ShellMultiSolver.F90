@@ -1,4 +1,4 @@
- ! /*****************************************************/
+! /*****************************************************/
 ! *
 ! *  Elmer, A Finite Element Software for Multiphysical Problems
 ! *
@@ -569,8 +569,10 @@
      SUBROUTINE BulkAssembly
 ! --------------------------------------------------------
        CALL StartAdvanceOutput('ShellSolve', 'Assembly:')
-       DO t=1,Solver % NumberOfActiveElements !!! Aqui en el otro hay la variable ACtive. Trackear alli a ver...
 
+       ! Plates go here
+       DO t=1,Solver % NumberOfActiveElements
+          
           CALL AdvanceOutput(t, Solver % NumberOfActiveElements)
 
           CurrentElement => GetActiveElement( t )
@@ -586,114 +588,116 @@
                 LocalDeflection(6*(i-1)+j) = Deflection(6*(k-1)+j)
              END DO
           END DO
-             
-          ! Plates go here:
-          ! --------------------------------------------------------------
-          IF( ( n == 3 ) .OR. ( n == 4 ) ) THEN 
-          
-             ! Active = GetNOFBoundaryElements
-             ! --------------------------------------------------------------
-             CALL GetElementNodes( ElementNodes )
-             
-             LoadN(1:n) = GetReal( SolverParams, 'Load Scale Factor', GotIt )
-             LoadScale = LoadN(1)
-             IF( .NOT. GotIt ) LoadScale = 1.0d0
-             
-             !      Nodal loads:
-             !      ------------
-             BodyForce => GetBodyForce()
-             
-             LoadVector = 0.0d0
-             
-             LoadX(1:n) = GetReal( BodyForce, 'Body Force 1', GotIt )
-             LoadY(1:n) = GetReal( BodyForce, 'Body Force 2', GotIt )
-             LoadZ(1:n) = GetReal( BodyForce, 'Body Force 3', GotIt )
-             LoadN(1:n) = GetReal( BodyForce, 'Pressure', GotIt )
-             LoadN(1:n) = LoadN(1:n) + GetReal( BodyForce, 'Normal Pressure', GotIt )
-             !      Material data:
-             !      --------------
-             !	******************************************************************************
-             !	(14.10.15) material data and thickness may be shifted to Body Force section
-             !	for more versatility (check feasibility)
-             !	******************************************************************************
-             Material => GetMaterial()
-         
-             Density(1:n) = GetReal( Material, 'Density', GotIt )
-             IF( .NOT.GotIt ) THEN
-                Density = 0.0d0
-                IF( TransientSimulation .OR. (Solver % NOfEigenvalues > 0)) &
-                     CALL Fatal( 'ShellSolver', 'Density required' )
-             END IF
-             
-             Poisson(1:n) = GetReal( Material, 'Poisson ratio', GotIt )
-             IF( Isotropic .AND. (.NOT.GotIt) ) &
-                  CALL Fatal( 'ShellSolver', 'Poisson ratio undefined' )
-             
-             Young(1:n) = GetReal( Material, 'Youngs modulus', GotIt )
-             IF( Isotropic .AND. (.NOT.GotIt) ) &
-                  CALL Fatal( 'ShellSolver', 'Youngs modulus undefined' )
-             !	Thickness shifted to Body force section and reading of it shifted to LocalMatrix 14.10.15
-             !       Thickness(1:n) = GetReal( Material, 'Thickness', GotIt )
-             !       IF( Isotropic .AND. (.NOT.GotIt) ) &
-             !                     CALL Fatal( 'ShellSolver', 'Thickness undefined' )
-             
-             Tension(1:n) = GetReal( Material, 'Tension', GotIt )
-             IF( .NOT. GotIt ) Tension = 0.0d0
-             
-             CALL LocalMatrix(  STIFF, DAMP, MASS, &
-                  FORCE, LoadX, LoadY, LoadZ, LoadN, CurrentElement, n, &
-                  ElementNodes, StabParam1, StabParam2, t, Poisson,     &
-                  Young, LocalDeflection, LargeDeflection,  &
-                  StabilityAnalysis, Nvector,TT,ThLoad )
-             
-             IF( TransientSimulation ) THEN	
-                CALL Default2ndOrderTime( MASS, DAMP, STIFF, FORCE )	
-             END IF
-             !      Update global matrix and rhs vector from local matrix & vector:
-             !      ---------------------------------------------------------------
-             CALL DefaultUpdateEquations( STIFF, FORCE )
-             IF ( Solver % NOFEigenValues > 0 ) &
-                CALL DefaultUpdateMass( MASS )
 
-          ! Beams go here!
-          ELSE IF ( n == 2 .AND. nd == 2) THEN
-             IF ( .NOT. (GetElementFamily(CurrentElement) == 2) ) CYCLE
-             
-             !----------------------------------------------------------------------
-             ! We assume that p-element definitions are not empoyed and hard-code
-             ! the bubble count:
-             !----------------------------------------------------------------------
-             !nb = 1
-             !IF (.NOT.(n == 2 .AND. nd == 2)) CALL Fatal('ShellSolver', &
-             !    'An unsupported 1-D element type or definition')
-
-             IF (LargeDeflection) THEN
-               CALL GetVectorLocalSolution(LocalSol, USolver=Solver)
-             ELSE
-               LocalSol = 0.0d0
-             END IF
-
-             CALL BeamStiffnessMatrix(CurrentElement, n, nd+nb, nb, TransientSimulation, .FALSE., &
-                  .FALSE., LargeDeflection, LocalSol, LocalRHSForce, .TRUE.)
-             
-             IF (LargeDeflection .AND. NonlinIter == 1) THEN
-                ! ---------------------------------------------------------------------------
-                ! Create a RHS vector which contains just the contribution of external loads
-                ! for the purpose of nonlinear error estimation:
-                ! ---------------------------------------------------------------------------
-                ValuesSaved => Solver % Matrix % RHS
-                Solver % Matrix % RHS => Solver % Matrix % BulkRHS
-                CALL DefaultUpdateForce(LocalRHSForce)
-                Solver % Matrix % RHS => ValuesSaved
-             END IF
-             
-          ELSE
+          IF(.NOT.(( n == 3 ) .OR. ( n == 4 )) .AND. .NOT.( n == 2 .AND. nd == 2)) THEN 
              CALL Fatal( 'ShellSolver', 'Illegal number of nodes. Aborting.' )
           END IF
+          
+          IF(.NOT.(( n == 3 ) .OR. ( n == 4 )) ) CYCLE
+          
+          ! Active = GetNOFBoundaryElements
+          ! --------------------------------------------------------------
+          CALL GetElementNodes( ElementNodes )
+          
+          LoadN(1:n) = GetReal( SolverParams, 'Load Scale Factor', GotIt )
+          LoadScale = LoadN(1)
+          IF( .NOT. GotIt ) LoadScale = 1.0d0
+          
+          !      Nodal loads:
+          !      ------------
+          BodyForce => GetBodyForce()
+          
+          LoadVector = 0.0d0
+          
+          LoadX(1:n) = GetReal( BodyForce, 'Body Force 1', GotIt )
+          LoadY(1:n) = GetReal( BodyForce, 'Body Force 2', GotIt )
+          LoadZ(1:n) = GetReal( BodyForce, 'Body Force 3', GotIt )
+          LoadN(1:n) = GetReal( BodyForce, 'Pressure', GotIt )
+          LoadN(1:n) = LoadN(1:n) + GetReal( BodyForce, 'Normal Pressure', GotIt )
+          !      Material data:
+          !      --------------
+          !	******************************************************************************
+          !	(14.10.15) material data and thickness may be shifted to Body Force section
+          !	for more versatility (check feasibility)
+          !	******************************************************************************
+          Material => GetMaterial()
+          
+          Density(1:n) = GetReal( Material, 'Density', GotIt )
+          IF( .NOT.GotIt ) THEN
+             Density = 0.0d0
+             IF( TransientSimulation .OR. (Solver % NOfEigenvalues > 0)) &
+                  CALL Fatal( 'ShellSolver', 'Density required' )
+          END IF
+          
+          Poisson(1:n) = GetReal( Material, 'Poisson ratio', GotIt )
+          IF( Isotropic .AND. (.NOT.GotIt) ) &
+               CALL Fatal( 'ShellSolver', 'Poisson ratio undefined' )
+          
+          Young(1:n) = GetReal( Material, 'Youngs modulus', GotIt )
+          IF( Isotropic .AND. (.NOT.GotIt) ) &
+               CALL Fatal( 'ShellSolver', 'Youngs modulus undefined' )
+          !	Thickness shifted to Body force section and reading of it shifted to LocalMatrix 14.10.15
+          !       Thickness(1:n) = GetReal( Material, 'Thickness', GotIt )
+          !       IF( Isotropic .AND. (.NOT.GotIt) ) &
+          !                     CALL Fatal( 'ShellSolver', 'Thickness undefined' )
+          
+          Tension(1:n) = GetReal( Material, 'Tension', GotIt )
+          IF( .NOT. GotIt ) Tension = 0.0d0
+          
+          CALL LocalMatrix(  STIFF, DAMP, MASS, &
+               FORCE, LoadX, LoadY, LoadZ, LoadN, CurrentElement, n, &
+               ElementNodes, StabParam1, StabParam2, t, Poisson,     &
+               Young, LocalDeflection, LargeDeflection,  &
+               StabilityAnalysis, Nvector,TT,ThLoad )
+          
+          IF( TransientSimulation ) THEN	
+             CALL Default2ndOrderTime( MASS, DAMP, STIFF, FORCE )	
+          END IF
+          !      Update global matrix and rhs vector from local matrix & vector:
+          !      ---------------------------------------------------------------
+          CALL DefaultUpdateEquations( STIFF, FORCE )
+          IF ( Solver % NOFEigenValues > 0 ) &
+               CALL DefaultUpdateMass( MASS )
+          
        END DO
        
+       ! Beams go here!
+       DO t=1,Solver % NumberOfActiveElements !!! Aqui en el otro hay la variable ACtive. Trackear alli a ver...
+          
+          IF ( .NOT.( n == 2 .AND. nd == 2)) CYCLE
+          IF ( .NOT. (GetElementFamily(CurrentElement) == 2) ) CYCLE
+          
+          !----------------------------------------------------------------------
+          ! We assume that p-element definitions are not empoyed and hard-code
+          ! the bubble count:
+          !----------------------------------------------------------------------
+          !nb = 1
+          !IF (.NOT.(n == 2 .AND. nd == 2)) CALL Fatal('ShellSolver', &
+          !    'An unsupported 1-D element type or definition')
+          
+          IF (LargeDeflection) THEN
+             CALL GetVectorLocalSolution(LocalSol, USolver=Solver)
+          ELSE
+             LocalSol = 0.0d0
+          END IF
+          
+          CALL BeamStiffnessMatrix(CurrentElement, n, nd+nb, nb, TransientSimulation, .FALSE., &
+               .FALSE., LargeDeflection, LocalSol, LocalRHSForce, .TRUE.)
+          
+          IF (LargeDeflection .AND. NonlinIter == 1) THEN
+             ! ---------------------------------------------------------------------------
+             ! Create a RHS vector which contains just the contribution of external loads
+             ! for the purpose of nonlinear error estimation:
+             ! ---------------------------------------------------------------------------
+             ValuesSaved => Solver % Matrix % RHS
+             Solver % Matrix % RHS => Solver % Matrix % BulkRHS
+             CALL DefaultUpdateForce(LocalRHSForce)
+             Solver % Matrix % RHS => ValuesSaved
+          END IF          
+       END DO ! End asemble beams
+       
 ! -------------------------------------------------------------
-    END SUBROUTINE BulkAssembly
+     END SUBROUTINE BulkAssembly
 ! -------------------------------------------------------------
 
 
