@@ -679,9 +679,9 @@
           ! We assume that p-element definitions are not empoyed and hard-code
           ! the bubble count:
           !----------------------------------------------------------------------
-          !nb = 1
-          !IF (.NOT.(n == 2 .AND. nd == 2)) CALL Fatal('ShellSolver', &
-          !    'An unsupported 1-D element type or definition')
+          nb = 1
+          IF (.NOT.(n == 2 .AND. nd == 2)) CALL Fatal('ShellSolver', &
+              'An unsupported 1-D element type or definition')
           
           IF (LargeDeflection) THEN
              CALL GetVectorLocalSolution(LocalSol, USolver=Solver)
@@ -690,7 +690,7 @@
           END IF
           
           CALL BeamStiffnessMatrix(CurrentElement, n, nd+nb, nb, TransientSimulation, .FALSE., &
-               .FALSE., LargeDeflection, LocalSol, LocalRHSForce, .TRUE.)
+               .FALSE., LargeDeflection, LocalSol, LocalRHSForce, .FALSE.)
           
           IF (LargeDeflection .AND. NonlinIter == 1) THEN
              ! ---------------------------------------------------------------------------
