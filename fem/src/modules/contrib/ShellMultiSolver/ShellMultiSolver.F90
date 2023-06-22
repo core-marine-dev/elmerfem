@@ -482,7 +482,8 @@
          at = CPUTime()
          CALL DefaultInitialize()
          CALL BulkAssembly()
-         CALL BCAssembly()				
+         CALL BCAssembly()
+!         CALL DefaultFinishBulkAssembly()
          CALL DefaultFinishAssembly()	
          CALL ConcentratedLoads()		
          ForceVector = LoadScale*ForceVector	
@@ -570,6 +571,10 @@
 ! --------------------------------------------------------
        CALL StartAdvanceOutput('ShellSolve', 'Assembly:')
 
+       LoadN(1:n) = GetReal( SolverParams, 'Load Scale Factor', GotIt )
+       LoadScale = LoadN(1)
+       IF( .NOT. GotIt ) LoadScale = 1.0d0
+
        ! Plates go here
        DO t=1,Solver % NumberOfActiveElements
           
@@ -598,11 +603,7 @@
           ! Active = GetNOFBoundaryElements
           ! --------------------------------------------------------------
           CALL GetElementNodes( ElementNodes )
-          
-          LoadN(1:n) = GetReal( SolverParams, 'Load Scale Factor', GotIt )
-          LoadScale = LoadN(1)
-          IF( .NOT. GotIt ) LoadScale = 1.0d0
-          
+                    
           !      Nodal loads:
           !      ------------
           BodyForce => GetBodyForce()
@@ -660,9 +661,16 @@
                CALL DefaultUpdateMass( MASS )
           
        END DO
-       
+
        ! Beams go here!
        DO t=1,Solver % NumberOfActiveElements !!! Aqui en el otro hay la variable ACtive. Trackear alli a ver...
+          CALL AdvanceOutput(t, Solver % NumberOfActiveElements)
+
+          CurrentElement => GetActiveElement( t )
+          n  = GetElementNOFNodes()
+          nd = GetElementDOFs(Indices)
+          nb = GetElementNOFBDOFs()
+          NodeIndexes => CurrentElement % NodeIndexes
           
           IF ( .NOT.( n == 2 .AND. nd == 2)) CYCLE
           IF ( .NOT. (GetElementFamily(CurrentElement) == 2) ) CYCLE
@@ -694,7 +702,14 @@
              CALL DefaultUpdateForce(LocalRHSForce)
              Solver % Matrix % RHS => ValuesSaved
           END IF          
-       END DO ! End asemble beams
+       END DO ! End assemble beams
+
+       !-----------------------------------------------------------------------------------
+       CALL Info('ShellSolver','Saving matrix to: linsys_a.dat',Level=5)
+       OPEN(1,FILE='linsys_a.dat', STATUS='Unknown')
+       CALL PrintMatrix(Solver % Matrix,.FALSE.,.FALSE.,SaveMass=.FALSE.,SaveDamp=.FALSE.)
+       CLOSE(1)
+       !-----------------------------------------------------------------------------------       
        
 ! -------------------------------------------------------------
      END SUBROUTINE BulkAssembly
