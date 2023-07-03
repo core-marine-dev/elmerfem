@@ -705,11 +705,19 @@
        END DO ! End assemble beams
 
        !-----------------------------------------------------------------------------------
-       CALL Info('ShellSolver','Saving matrix to: linsys_a.dat',Level=5)
-       OPEN(1,FILE='linsys_a.dat', STATUS='Unknown')
+       CALL Info('ShellSolver','Saving matrix to: linsys_a_shmslv.dat',Level=5)
+       OPEN(1,FILE='linsys_a_shmslv.dat', STATUS='Unknown')
        CALL PrintMatrix(Solver % Matrix,.FALSE.,.FALSE.,SaveMass=.FALSE.,SaveDamp=.FALSE.)
        CLOSE(1)
        !-----------------------------------------------------------------------------------       
+
+       !-----------------------------------------------------------------------------------
+       CALL Info('ShellSolver','Saving right term to: linsys_b_shmslv.dat',Level=5)
+       OPEN(1,FILE='linsys_b_shmslv.dat', STATUS='Unknown')
+       CALL PrintRHS(Solver % Matrix, .FALSE., .FALSE.)
+       CLOSE(1)
+       !-----------------------------------------------------------------------------------       
+
        
 ! -------------------------------------------------------------
      END SUBROUTINE BulkAssembly
