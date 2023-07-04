@@ -65,6 +65,7 @@
       CALL ListAddInteger( SolverParams, 'Variable DOFs', 6 )
       CALL ListAddString( SolverParams, 'Variable', 'Deflection' )
     END IF
+    CALL ListAddNewLogical(SolverParams, 'Bubbles in Global System', .FALSE.)
     CALL ListAddInteger( SolverParams, 'Time derivative order', 2 )
 ! -------------------------------------------------------------
   END SUBROUTINE ShellSolver_Init
@@ -679,7 +680,8 @@
           ! We assume that p-element definitions are not empoyed and hard-code
           ! the bubble count:
           !----------------------------------------------------------------------
-          nb = 1
+          !nb = 1 ! We leave this by the moment
+          CALL Info('ShellSolver', CHAR(nb))
           IF (.NOT.(n == 2 .AND. nd == 2)) CALL Fatal('ShellSolver', &
               'An unsupported 1-D element type or definition')
           
@@ -718,7 +720,6 @@
        CLOSE(1)
        !-----------------------------------------------------------------------------------       
 
-       
 ! -------------------------------------------------------------
      END SUBROUTINE BulkAssembly
 ! -------------------------------------------------------------
