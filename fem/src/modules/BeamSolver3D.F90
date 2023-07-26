@@ -167,26 +167,34 @@ SUBROUTINE TimoshenkoSolver(Model, Solver, dt, TransientSimulation)
       CALL BeamStiffnessMatrix(Element, n, nd+nb, nb, TransientSimulation, &
           MassAssembly=MassAssembly, HarmonicAssembly=HarmonicAssembly)      
     END DO
-
-    !-----------------------------------------------------------------------------------     
-    CALL Info('ShellSolver','Saving matrix to: linsys_a_b3dslv.dat',Level=5)
-    OPEN(1,FILE='linsys_a_b3dslv.dat', STATUS='Unknown')
-    CALL PrintMatrix(Solver % Matrix,.FALSE.,.FALSE.,SaveMass=.FALSE.,SaveDamp=.FALSE.)
-    CLOSE(1)
-    !-----------------------------------------------------------------------------------   
-
-    !-----------------------------------------------------------------------------------              
-    CALL Info('ShellSolver','Saving right term to: linsys_b_b3dslv.dat',Level=5)
-    OPEN(1,FILE='linsys_b_b3dslv.dat', STATUS='Unknown')
-    CALL PrintRHS(Solver % Matrix, .FALSE., .FALSE.)
-    CLOSE(1)
-    !----------------------------------------------------------------------------------- 
     
     CALL DefaultFinishBulkAssembly()
     !CALL DefaultFinishBoundaryAssembly()
     CALL DefaultFinishAssembly()
+
+    !-----------------------------------------------------------------------------------     
+    CALL Info('ShellSolver','Saving matrix to: linsys_a_b3dslv_0.dat',Level=5)
+    OPEN(1,FILE='linsys_a_b3dslv_0.dat', STATUS='Unknown')
+    CALL PrintMatrix(Solver % Matrix,.FALSE.,.FALSE.,SaveMass=.FALSE.,SaveDamp=.FALSE.)
+    CLOSE(1)
+    !-----------------------------------------------------------------------------------   
+
     CALL DefaultDirichletBCs()
 
+    !-----------------------------------------------------------------------------------     
+    CALL Info('ShellSolver','Saving matrix to: linsys_a_b3dslv.dat',Level=5)
+    OPEN(1,FILE='linsys_a_b3dslv_1.dat', STATUS='Unknown')
+    CALL PrintMatrix(Solver % Matrix,.FALSE.,.FALSE.,SaveMass=.FALSE.,SaveDamp=.FALSE.)
+    CLOSE(1)
+    !-----------------------------------------------------------------------------------   
+    
+    !-----------------------------------------------------------------------------------              
+    CALL Info('ShellSolver','Saving right term to: linsys_b_b3dslv.dat',Level=5)
+    OPEN(1,FILE='linsys_b_b3dslv_1.dat', STATUS='Unknown')
+    CALL PrintRHS(Solver % Matrix, .FALSE., .FALSE.)
+    CLOSE(1)
+    !-----------------------------------------------------------------------------------
+    
     !-----------------------
     ! Call a linear solver:
     !-----------------------
@@ -194,7 +202,7 @@ SUBROUTINE TimoshenkoSolver(Model, Solver, dt, TransientSimulation)
     IF ( DefaultConverged() ) EXIT    
 
   END DO
-
+  
   CALL DefaultFinish()
 
   IF (MeshDisplacementActive) THEN

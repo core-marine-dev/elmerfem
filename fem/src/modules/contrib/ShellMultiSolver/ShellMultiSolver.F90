@@ -65,8 +65,9 @@
       CALL ListAddInteger( SolverParams, 'Variable DOFs', 6 )
       CALL ListAddString( SolverParams, 'Variable', 'Deflection' )
     END IF
-    CALL ListAddNewLogical(SolverParams, 'Bubbles in Global System', .FALSE.)
+    CALL ListAddNewLogical(SolverParams, 'Bubbles in Global System', .FALSE.) ! Added to
     CALL ListAddInteger( SolverParams, 'Time derivative order', 2 )
+    CALL ListAddNewString( SolverParams, 'Element', 'line p:1 b:1')
 ! -------------------------------------------------------------
   END SUBROUTINE ShellSolver_Init
 ! --------------------------------------------------------------
@@ -485,7 +486,22 @@
          CALL BulkAssembly()
          CALL BCAssembly()
 !         CALL DefaultFinishBulkAssembly()
-         CALL DefaultFinishAssembly()	
+         CALL DefaultFinishAssembly()
+         
+         !-----------------------------------------------------------------------------------
+         CALL Info('ShellSolver','Saving matrix to: linsys_a_shmslv.dat',Level=5)
+         OPEN(1,FILE='linsys_a_shmslv_0.dat', STATUS='Unknown')
+         CALL PrintMatrix(Solver % Matrix,.FALSE.,.FALSE.,SaveMass=.FALSE.,SaveDamp=.FALSE.)
+         CLOSE(1)
+         !-----------------------------------------------------------------------------------       
+
+         !-----------------------------------------------------------------------------------
+         CALL Info('ShellSolver','Saving right term to: linsys_b_shmslv.dat',Level=5)
+         OPEN(1,FILE='linsys_b_shmslv_0.dat', STATUS='Unknown')
+         CALL PrintRHS(Solver % Matrix, .FALSE., .FALSE.)
+         CLOSE(1)
+         !-----------------------------------------------------------------------------------  
+         
          CALL ConcentratedLoads()		
          ForceVector = LoadScale*ForceVector	
          
@@ -494,11 +510,27 @@
 
 !    Dirichlet boundary conditions:
 !    ------------------------------
-         CALL SetDirichletBCs()		
+         CALL SetDirichletBCs()
+
+         !-----------------------------------------------------------------------------------
+         CALL Info('ShellSolver','Saving matrix to: linsys_a_shmslv_2.dat',Level=5)
+         OPEN(1,FILE='linsys_a_shmslv_1.dat', STATUS='Unknown')
+         CALL PrintMatrix(Solver % Matrix,.FALSE.,.FALSE.,SaveMass=.FALSE.,SaveDamp=.FALSE.)
+         CLOSE(1)
+         !-----------------------------------------------------------------------------------       
+
+         !-----------------------------------------------------------------------------------
+         CALL Info('ShellSolver','Saving right term to: linsys_b_shmslv_2.dat',Level=5)
+         OPEN(1,FILE='linsys_b_shmslv_1.dat', STATUS='Unknown')
+         CALL PrintRHS(Solver % Matrix, .FALSE., .FALSE.)
+         CLOSE(1)
+         !------------------------------------------------------------------------------------  
          
          at = CPUTime() - at
          WRITE(Message,'(a,F8.2)') ' Assembly: (s)', at
          CALL Info('ShellSolve',Message)
+
+         
 
 !    Solve the system and we are done:
 !    ---------------------------------
@@ -680,7 +712,7 @@
           ! We assume that p-element definitions are not empoyed and hard-code
           ! the bubble count:
           !----------------------------------------------------------------------
-          !nb = 1 ! We leave this by the moment
+          nb = 1 ! We leave this by the moment
           CALL Info('ShellSolver', CHAR(nb))
           IF (.NOT.(n == 2 .AND. nd == 2)) CALL Fatal('ShellSolver', &
               'An unsupported 1-D element type or definition')
@@ -705,20 +737,6 @@
              Solver % Matrix % RHS => ValuesSaved
           END IF          
        END DO ! End assemble beams
-
-       !-----------------------------------------------------------------------------------
-       CALL Info('ShellSolver','Saving matrix to: linsys_a_shmslv.dat',Level=5)
-       OPEN(1,FILE='linsys_a_shmslv.dat', STATUS='Unknown')
-       CALL PrintMatrix(Solver % Matrix,.FALSE.,.FALSE.,SaveMass=.FALSE.,SaveDamp=.FALSE.)
-       CLOSE(1)
-       !-----------------------------------------------------------------------------------       
-
-       !-----------------------------------------------------------------------------------
-       CALL Info('ShellSolver','Saving right term to: linsys_b_shmslv.dat',Level=5)
-       OPEN(1,FILE='linsys_b_shmslv.dat', STATUS='Unknown')
-       CALL PrintRHS(Solver % Matrix, .FALSE., .FALSE.)
-       CLOSE(1)
-       !-----------------------------------------------------------------------------------       
 
 ! -------------------------------------------------------------
      END SUBROUTINE BulkAssembly
