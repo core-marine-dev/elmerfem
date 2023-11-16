@@ -727,7 +727,7 @@
           END IF
           
           CALL BeamStiffnessMatrix(CurrentElement, n, nd+nb, nb, TransientSimulation, .FALSE., &
-               .FALSE., LargeDeflection, LocalSol, LocalRHSForce, .TRUE.)
+               .FALSE., LargeDeflection, LocalSol, LocalRHSForce, .TRUE., .FALSE.)
           
           IF (LargeDeflection .AND. NonlinIter == 1) THEN
              ! ---------------------------------------------------------------------------
