@@ -1,0 +1,128 @@
+! Test case with shell and beam (3D interaction, i.e. the beam is perpendicular to the plane
+! of the shell). The shell is fixed at one of its tips. At the centre point of the opposite
+! side (opposite to the fixed edge) the shell is connected to the beam, which extendes
+! vertically upwards
+
+Check Keywords "Warn" 
+
+Header
+  Mesh DB "." "mesh" 
+End
+
+Simulation
+  Max Output Level = 5
+  Coordinate System = Cartesian 3D
+  Simulation Type = Steady
+  Output Intervals = 1
+  Steady State Max Iterations = 1
+  Post File = "case-4.vtu"
+End
+
+Body 1
+  Name = plate
+  Equation = 1
+  Material = 1
+  Body Force = 1
+End
+
+Body 2
+  Name = beam
+  Equation = 1
+  Material = 2
+  Body Force = 2
+End
+
+Material 1
+  Name = "Plate material"
+  Youngs modulus = Real 2.0e+11
+  Poisson ratio = Real 0.3
+  Density = Real 7850.0
+End
+
+Material 2
+  Name = "Beam material"
+  Youngs modulus = Real 2.0e+11
+  Shear modulus = Real 7.93e+10
+  Poisson ratio = Real 0.3
+
+  ! The density is used only in transient cases:
+  Density = Real 7850.0		
+
+  ! Specify basis where the cross section parameters are expressed:
+  Principal Direction 2(3) = Real 0.0 1.0 0.0 !!! 0.0 0.0 -1.0
+
+  ! Specify I_k:
+  Second Moment of Area 2 = Real 4.92e-6
+  Second Moment of Area 3 = Real 4.92e-6
+
+  ! Specify A:
+  Cross Section Area = Real 0.0036
+
+  ! Specify J_T:
+  Torsional Constant = Real 9.84e-06
+End
+
+! Volumetric forces:
+Body Force 1
+  Direction Of Outward Normal = Real 1.0
+  Thickness = Real 0.01
+  Body Force 1 = 0.0
+  Body Force 2 = 0.0
+  Body Force 3 = -77008.5 !rho * g
+End
+
+Body Force 2
+  Body Force 1 = 0.0
+  Body Force 2 = 0.0
+  Body Force 3 = -277.2306 !rho * g * A
+End
+
+Equation 1 :: Active Solvers(1) = 1
+
+Solver 1
+  Output File Append = Logical True
+
+  Equation = Shell Solver !"Timoshenko Beam Equation"
+  !Procedure = "BeamSolver3D" "TimoshenkoSolver"
+  Procedure = "ShellMultiSolver" "ShellSolver"
+
+  Nonlinear System Max Iterations = 1
+  Nonlinear System Convergence Tolerance = 1e-7
+
+  Linear System Solver = "Iterative" ! Memory allocation error found with Direct solver
+  Linear System Preconditioning = Diagonal
+  Linear System Max Iterations = 10000 !Added for iterative solver
+  Linear System Convergence Tolerance = 1.0e-9
+  Linear System Iterative Method = IDRS
+  Steady State Convergence Tolerance = 1e-9
+
+  Shear Stabilization Parameter = Real 0.0
+  Drilling Stabilization Parameter = Real 1.0
+  Calculate Stresses = Logical FALSE
+  !Compute Membrane Stress = Logical TRUE
+  Compute Total Stress = Logical FALSE
+  !Compute Bending Stress = Logical TRUE
+  Top Side Stress = Logical FALSE
+  Bottom Side Stress = Logical TRUE
+  Membrane Only = Logical FALSE
+  Use DKT Triangle = Logical TRUE
+  Use SMITC Element = Logical FALSE
+  Use MITC3 Element = Logical FALSE
+  Use RMITC3 Element = Logical FALSE
+  Integration Points = Integer 3
+
+  Linear System Save = Logical True
+  Linear System Save Slot = String "after"
+  Linear System Save Solution = Logical True
+End
+
+Boundary Condition 1
+  Target Boundaries(1) = 1
+  Name = "Cantilevered"
+  U 1 = Real 0.0
+  U 2 = Real 0.0
+  U 3 = Real 0.0
+  Theta 1 = Real 0.0
+  Theta 2 = Real 0.0
+  Theta 3 = Real 0.0
+End
