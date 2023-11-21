@@ -151,7 +151,7 @@
      REAL(KIND=dp) :: at,st,at0
 
      REAL(KIND=dp) :: StabParam1, StabParam2, S(3,3), PlyThick, &
-         Tx(3), Ty(3), Tz(3), l, Weight3(3), Weight4(4), &
+         Tx(3), Ty(3), Tz(3), l, Weight2(2), Weight3(3), Weight4(4), &
          Fx, Fy, Fz, Mx, My, Mz, &
          Eps(3,3), Kap(3,3), Nten(3,3), Mten(3,3),Amatrix(3,3), Bmatrix(3,3), Dmatrix(3,3), Astarmatrix(2,2),Gdrilling(1,1),& 
          Transformation(3,3), T5(5,5), T0(3,3), T0S(2,2), &
@@ -1021,8 +1021,7 @@
           
         SELECT CASE( NumberOfElementNodes )
         CASE( 2 )
-          ! Do nothing right now:
-          ! Weights(t,1:2) = Weight2(1:2)
+          Weights(t,1:2) = Weight2(1:2)
         CASE( 3 )
           Weights(t,1:3) = Weight3(1:3)
         CASE( 4 )
