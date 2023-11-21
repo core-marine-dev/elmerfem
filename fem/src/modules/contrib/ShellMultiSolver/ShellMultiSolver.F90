@@ -925,7 +925,7 @@
 
       OPEN( UNIT=98, file='nvec.txt' )
       DO t = 1, Solver % NumberOfActiveElements
-        
+ 
         IF( RealTime() - at0 > 1.0 ) THEN
           WRITE(*,'(a,i3,a)') ' Stress calculation:', &
               INT(100.0 - 100.0*(Solver % &
@@ -940,82 +940,95 @@
         
         CALL GetElementNodes( ElementNodes )
 
-	!	Thickness shifted to Body force section and reading of it shifted to 
-	!	calculatestresses and localMatrix 15.10.15
-        Thickness(1:n) = GetConstReal(BodyForce, 'Thickness', GotIt )
-        IF( Isotropic .AND. (.NOT.GotIt) ) &
+        !!! SELECT BEAMS AND PLATES
+        IF(( n == 3 ) .OR. ( n == 4 )) THEN
+
+          ! Thickness shifted to Body force section and reading of it shifted to 
+	  ! calculatestresses and localMatrix 15.10.15
+          Thickness(1:n) = GetConstReal(BodyForce, 'Thickness', GotIt )
+          IF( Isotropic .AND. (.NOT.GotIt) ) &
             CALL Fatal( 'ShellSolver', 'Thickness undefined' )
 
-        LocalDeflection = 0.0d0
-        DO i = 1,n
-          k = DeflectionPerm(NodeIndexes(i))
-          DO j = 1,6
-            LocalDeflection(6*(i-1)+j) = Deflection(6*(k-1)+j)
+          LocalDeflection = 0.0d0
+          DO i = 1,n
+            k = DeflectionPerm(NodeIndexes(i))
+            DO j = 1,6
+              LocalDeflection(6*(i-1)+j) = Deflection(6*(k-1)+j)
+            END DO
           END DO
-        END DO
 
-!         Compute the local stresses (constant for each element):  
-!         -------------------------------------------------------
-        CALL LocalStress( CurrentElement, n, ElementNodes, &
-            StabParam1, StabParam2, LocalDeflection, Weight3, Weight4, &
-            Eps, Kap, Nten, NtenMaterial, Mten, MtenMaterial, Young, &
-            Poisson, Thickness, LargeDeflection,t )
+          ! Compute the local stresses (constant for each element):  
+          ! -------------------------------------------------------
+          CALL LocalStress( CurrentElement, n, ElementNodes, &
+               StabParam1, StabParam2, LocalDeflection, Weight3, Weight4, &
+               Eps, Kap, Nten, NtenMaterial, Mten, MtenMaterial, Young, &
+               Poisson, Thickness, LargeDeflection,t )
         
-        IF( ListGetLogical( SolverParams,'Compute Membrane Stress',GotIt) ) THEN
-          SxxElement(t) = Nten(1,1)
-          !changed Compute strain to Compute Membrane Stress20.3.15
-          SyyElement(t) = Nten(2,2)
-          SzzElement(t) = Nten(3,3)
-          SxyElement(t) = Nten(1,2)
-          SxzElement(t) = Nten(1,3)
-          SyzElement(t) = Nten(2,3)
+          IF( ListGetLogical( SolverParams,'Compute Membrane Stress',GotIt) ) THEN
+            SxxElement(t) = Nten(1,1)
+            !changed Compute strain to Compute Membrane Stress20.3.15
+            SyyElement(t) = Nten(2,2)
+            SzzElement(t) = Nten(3,3)
+            SxyElement(t) = Nten(1,2)
+            SxzElement(t) = Nten(1,3)
+            SyzElement(t) = Nten(2,3)
           
-          EpsxxElement(t) = Eps(1,1)
-          EpsyyElement(t) = Eps(2,2)
-          EpszzElement(t) = Eps(3,3)
-          EpsxyElement(t) = Eps(1,2)*2.0
-          EpsxzElement(t) = Eps(1,3)*2.0
-          EpsyzElement(t) = Eps(2,3)*2.0
-!	Shear strains multiplied by 2 because these are the components of strain tensor which are half of strains
+            EpsxxElement(t) = Eps(1,1)
+            EpsyyElement(t) = Eps(2,2)
+            EpszzElement(t) = Eps(3,3)
+            EpsxyElement(t) = Eps(1,2)*2.0
+            EpsxzElement(t) = Eps(1,3)*2.0
+            EpsyzElement(t) = Eps(2,3)*2.0
+            ! Shear strains multiplied by 2 because these are the components of strain
+            ! tensor which are half of strains
 
-        ELSE IF( ListGetLogical( SolverParams,'Compute Bending Stress',GotIt) ) THEN  
-          SxxElement(t) = Mten(1,1)	!Changed Compute Curvature to Compute Bending Stress 20.3.15 
-          SyyElement(t) = Mten(2,2)
-          SzzElement(t) = Mten(3,3)
-          SxyElement(t) = Mten(1,2)
-          SxzElement(t) = Mten(1,3)
-          SyzElement(t) = Mten(2,3)
+          ELSE IF( ListGetLogical( SolverParams,'Compute Bending Stress',GotIt) ) THEN  
+            SxxElement(t) = Mten(1,1)	!Changed Compute Curvature to Compute Bending Stress 20.3.15 
+            SyyElement(t) = Mten(2,2)
+            SzzElement(t) = Mten(3,3)
+            SxyElement(t) = Mten(1,2)
+            SxzElement(t) = Mten(1,3)
+            SyzElement(t) = Mten(2,3)
           
-          EpsxxElement(t) = Kap(1,1)
-          EpsyyElement(t) = Kap(2,2)
-          EpszzElement(t) = Kap(3,3)
-          EpsxyElement(t) = Kap(1,2)*2.0
-          EpsxzElement(t) = Kap(1,3)*2.0
-          EpsyzElement(t) = Kap(2,3)*2.0
+            EpsxxElement(t) = Kap(1,1)
+            EpsyyElement(t) = Kap(2,2)
+            EpszzElement(t) = Kap(3,3)
+            EpsxyElement(t) = Kap(1,2)*2.0
+            EpsxzElement(t) = Kap(1,3)*2.0
+            EpsyzElement(t) = Kap(2,3)*2.0
 
-        ELSEIF( ListGetLogical( SolverParams, 'Compute Total Stress', GotIt ) ) THEN
-          SxxElement(t) = Mten(1,1)+Nten(1,1)
-          SyyElement(t) = Mten(2,2)+Nten(2,2)
-          SzzElement(t) = Mten(3,3)+Nten(3,3)
-          SxyElement(t) = Mten(1,2)+Nten(1,2)
-          SxzElement(t) = Mten(1,3)+Nten(1,3)
-          SyzElement(t) = Mten(2,3)+Nten(2,3)
+          ELSEIF( ListGetLogical( SolverParams, 'Compute Total Stress', GotIt ) ) THEN
+            SxxElement(t) = Mten(1,1)+Nten(1,1)
+            SyyElement(t) = Mten(2,2)+Nten(2,2)
+            SzzElement(t) = Mten(3,3)+Nten(3,3)
+            SxyElement(t) = Mten(1,2)+Nten(1,2)
+            SxzElement(t) = Mten(1,3)+Nten(1,3)
+            SyzElement(t) = Mten(2,3)+Nten(2,3)
           
-          EpsxxElement(t) = Kap(1,1)+Eps(1,1)
-          EpsyyElement(t) = Kap(2,2)+Eps(2,2)
-          EpszzElement(t) = Kap(3,3)+Eps(3,3)
-          EpsxyElement(t) = (Kap(1,2)+Eps(1,2))*2.0
-          EpsxzElement(t) = (Kap(1,3)+Eps(1,3))*2.0
-          EpsyzElement(t) = (Kap(2,3)+Eps(2,3))*2.0
-        END IF
+            EpsxxElement(t) = Kap(1,1)+Eps(1,1)
+            EpsyyElement(t) = Kap(2,2)+Eps(2,2)
+            EpszzElement(t) = Kap(3,3)+Eps(3,3)
+            EpsxyElement(t) = (Kap(1,2)+Eps(1,2))*2.0
+            EpsxzElement(t) = (Kap(1,3)+Eps(1,3))*2.0
+            EpsyzElement(t) = (Kap(2,3)+Eps(2,3))*2.0
+          END IF
 
+        !!! SELECT BEAMS AND PLATES
+        ELSE IF ( n == 2 .AND. nd == 2) THEN
+          IF ( .NOT. (GetElementFamily(CurrentElement) == 2) ) CYCLE ! Exclude Boundaries
+
+        END IF ! End of doing the work for shells and beams 
+          
         SELECT CASE( NumberOfElementNodes )
+        CASE( 2 )
+          ! Do nothing right now:
+          ! Weights(t,1:2) = Weight2(1:2)
         CASE( 3 )
           Weights(t,1:3) = Weight3(1:3)
         CASE( 4 )
           Weights(t,1:4) = Weight4(1:4)
         END SELECT
-        
+
       END DO		! Loop on elements ends
       CLOSE( 98 )
 
