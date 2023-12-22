@@ -941,7 +941,7 @@
         CALL GetElementNodes( ElementNodes )
 
         !!! SELECT BEAMS AND PLATES
-        IF(( n == 3 ) .OR. ( n == 4 )) THEN
+        IF(( n == 3 ) .OR. ( n == 4 )) THEN ! This element belongs to a shell
 
           ! Thickness shifted to Body force section and reading of it shifted to 
 	  ! calculatestresses and localMatrix 15.10.15
@@ -1014,9 +1014,38 @@
           END IF
 
         !!! SELECT BEAMS AND PLATES
-        ELSE IF ( n == 2 .AND. nd == 2) THEN
+        ELSE IF ( n == 2 .AND. nd == 2) THEN ! This element belongs to a beam
           IF ( .NOT. (GetElementFamily(CurrentElement) == 2) ) CYCLE ! Exclude Boundaries
 
+          ! In shells: local deflection -> Nothing to do here about this?
+
+          ! Compute the local stresses (constant for each element):  
+          ! -------------------------------------------------------
+          CALL LocalBeamStress( CurrentElement, n, ElementNodes, &
+               StabParam1, StabParam2, LocalDeflection, Weight3, Weight4, &
+               Eps, Kap, Nten, NtenMaterial, Mten, MtenMaterial, Young, &
+               Poisson, t )
+
+          ! In shells: different options are considered to compute stresses:
+          ! a) Compute membrane stress
+          ! b) Compute bending stress
+          ! c) Compute total stress
+          ! Here, do I need to distinguish between cases (dpending on beam model)? TBChecked
+          ! For the moment, consider here way c): compute total stress
+          SxxElement(t) = Mten(1,1)+Nten(1,1)
+          SyyElement(t) = Mten(2,2)+Nten(2,2)
+          SzzElement(t) = Mten(3,3)+Nten(3,3)
+          SxyElement(t) = Mten(1,2)+Nten(1,2)
+          SxzElement(t) = Mten(1,3)+Nten(1,3)
+          SyzElement(t) = Mten(2,3)+Nten(2,3)
+          
+          EpsxxElement(t) = Kap(1,1)+Eps(1,1)
+          EpsyyElement(t) = Kap(2,2)+Eps(2,2)
+          EpszzElement(t) = Kap(3,3)+Eps(3,3)
+          EpsxyElement(t) = (Kap(1,2)+Eps(1,2))*2.0
+          EpsxzElement(t) = (Kap(1,3)+Eps(1,3))*2.0
+          EpsyzElement(t) = (Kap(2,3)+Eps(2,3))*2.0
+          
         END IF ! End of doing the work for shells and beams 
           
         SELECT CASE( NumberOfElementNodes )
@@ -2623,6 +2652,17 @@
      END SUBROUTINE LocalStress
 ! ====================================================================
 
+
+     ! ====================================================================
+     ! Function to calculate stresses in beam elements:
+     SUBROUTINE LocalBeamStress( Element, n, Nodes, StabParam1,  StabParam2,LocalDeflection,&
+          Weight3, Weight4, Eps, Kap, Nten, NtenMaterial, Mten, MtenMaterial, NodalYoung,&
+          NodalPoisson, ElementNumber )
+       
+       ! Do nothing yet
+       
+     END SUBROUTINE LocalStress
+     ! ====================================================================
 
      SUBROUTINE AveragingWeights3( Nodes, Weight3 )
 ! ---------------------------------------------------------------
