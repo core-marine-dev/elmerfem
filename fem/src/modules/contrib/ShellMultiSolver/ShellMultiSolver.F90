@@ -2658,10 +2658,26 @@
      SUBROUTINE LocalBeamStress( Element, n, Nodes, StabParam1,  StabParam2,LocalDeflection,&
           Weight3, Weight4, Eps, Kap, Nten, NtenMaterial, Mten, MtenMaterial, NodalYoung,&
           NodalPoisson, ElementNumber )
+
+       IMPLICIT NONE
+       REAL(KIND=dp) :: StabParam1, StabParam2, LocalDeflection(:), &
+            Weight3(:), Weight4(:), Eps(3,3), Kap(3,3), NTen(3,3), MTen(3,3), &
+            NtenMaterial(2,2), MtenMaterial(2,2), NodalYoung(:) , NodalPoisson(:)
+       INTEGER :: n, ElementNumber
+       TYPE( GaussIntegrationPoints_t ) :: IntegStuff	
        
+       TYPE(Nodes_t) :: Nodes
+       TYPE(Element_t), POINTER :: Element
+       INTEGER, PARAMETER :: MaxNodes = 4, MaxDofs = 6*MaxNodes
+       LOGICAL :: LargeDeflection
+       CHARACTER(LEN=15) :: Aniso, Aniso1					
+       REAL(Kind=dp) :: Point1(3), Point2(3),Tmatrix(3,3),Te,alfa(2),sinTh,cosTh	
+       REAL(kind=dp), POINTER ::	IniBen(:,:) 
+       REAL(kind=dp) :: IniBen2(2),Tepsilon_1(3),Tepsilon_2(3),Tbending_1(3),Tbending_2(3)		
+       LOGICAL :: Found
        ! Do nothing yet
        
-     END SUBROUTINE LocalStress
+     END SUBROUTINE LocalBeamStress
      ! ====================================================================
 
      SUBROUTINE AveragingWeights3( Nodes, Weight3 )
