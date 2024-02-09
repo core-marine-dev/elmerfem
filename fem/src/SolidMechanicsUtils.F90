@@ -89,7 +89,7 @@ CONTAINS
 
     REAL(KIND=dp), TARGET :: Mass(6*nd,6*nd), Stiff(6*nd,6*nd), Damp(6*nd,6*nd)
     REAL(KIND=dp) :: Force(6*nd)
-    REAL(KIND=dp) :: RBlock(3,3), R(6*nd,6*nd)
+    REAL(KIND=dp) :: RBlock(3,3), R(6*nd,6*nd), ROffset(3,3)
     REAL(KIND=dp) :: Basis(nd), dBasis(nd,3), DetJ, Weight
     REAL(KIND=dp) :: Youngs_Modulus(n), Shear_Modulus(n), Area(n), Density(n)
     REAL(KIND=dp) :: Form_Factor(n)
@@ -99,7 +99,7 @@ CONTAINS
     REAL(KIND=dp) :: Mass_Inertia_Moment(n), Damping(n), RayleighBeta(n)
     REAL(KIND=dp) :: Load(3,n), f(3)
     REAL(KIND=dp) :: PrevSolVec(6*nd)
-    REAL(KIND=dp) :: E, A, G, rho, DampCoef, FormFact
+    REAL(KIND=dp) :: E, A, G, rho, DampCoef, FormFact, b
     REAL(KIND=dp) :: EA, GA, MOI, Mass_per_Length 
     REAL(KIND=dp) :: E_diag(3)
 
@@ -170,7 +170,11 @@ CONTAINS
       Area_Moment_3(1:n) = GetReal(Material, 'Second Moment of Area 3', Found)
       IF (.NOT. Found) CALL Fatal('BeamStiffnessMatrix', 'Second Moment of Area 3 needed')
     END IF
-      
+
+    ! We assume the offset to be zero if not explicitly defined:
+    Beam_Offset(1:n) = GetReal(Material, 'Beam Offset', Found)
+    IF( .NOT. Found ) Beam_Offset = 0.0
+    
     IF (MassAssembly) THEN
       Density(1:n) = GetReal(Material, 'Density', Found)
       IF (.NOT. Found) CALL Fatal('BeamStiffnessMatrix', 'Density needed')
@@ -281,6 +285,7 @@ CONTAINS
       G = SUM(Basis(1:n) * Shear_Modulus(1:n))
       FormFact = SUM(Basis(1:n) * Form_Factor(1:n))
       A = SUM(Basis(1:n) * Area(1:n))
+      b = SUM(Basis(1:n) * Beam_Offset(1:n))
 
       E_diag(1) = G * SUM(Basis(1:n) * Torsional_Constant(1:n))
       E_diag(2) = E * SUM(Basis(1:n) * Area_Moment_2(1:n))
@@ -488,12 +493,25 @@ CONTAINS
     RBlock(1,1:3) = e1(1:3)
     RBlock(2,1:3) = e2(1:3)
     RBlock(3,1:3) = e3(1:3)
+
     DO i=1,nd-nb
       i0 = (i-1)*DOFs
       R(i0+1:i0+3,i0+1:i0+3) =  RBlock(1:3,1:3)
       R(i0+4:i0+6,i0+4:i0+6) =  RBlock(1:3,1:3)
     END DO
 
+    ! Include the offset matrix in case the beam is defined with an offset with respect
+    ! to the actual nodes:
+    IF (b .GT. 0.0) THEN
+       ROffset = 0.0d0
+       ROffset(1,2) = -1.0 * b
+       ROffset(2,1) = b
+       DO i=1,nd-nb
+          i0 = (i-1)*DOFs
+          R(i0+1:i0+3,i0+4:i0+6) =  MATMUL(RBlock(1:3,1:3), ROffset)
+       END DO
+    END IF
+        
     !-------------------------------------------------------
     ! Transform to the global DOFs:
     !-------------------------------------------------------
