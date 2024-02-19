@@ -171,10 +171,6 @@ CONTAINS
       IF (.NOT. Found) CALL Fatal('BeamStiffnessMatrix', 'Second Moment of Area 3 needed')
     END IF
 
-    ! We assume the offset to be zero if not explicitly defined:
-    Beam_Offset(1:n) = GetReal(Material, 'Beam Offset', Found)
-    IF( .NOT. Found ) Beam_Offset = 0.0
-    
     IF (MassAssembly) THEN
       Density(1:n) = GetReal(Material, 'Density', Found)
       IF (.NOT. Found) CALL Fatal('BeamStiffnessMatrix', 'Density needed')
@@ -285,7 +281,6 @@ CONTAINS
       G = SUM(Basis(1:n) * Shear_Modulus(1:n))
       FormFact = SUM(Basis(1:n) * Form_Factor(1:n))
       A = SUM(Basis(1:n) * Area(1:n))
-      b = SUM(Basis(1:n) * Beam_Offset(1:n))
 
       E_diag(1) = G * SUM(Basis(1:n) * Torsional_Constant(1:n))
       E_diag(2) = E * SUM(Basis(1:n) * Area_Moment_2(1:n))
