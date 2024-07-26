@@ -1,0 +1,167 @@
+! -------------------------------------------------------------------------
+! STIFFENED PLATE
+!
+! This test case represents a panel forming part of a ship hull structure.
+! In the context of the naval architecture, ship structures, particularly
+! hulls, are usually formed by panels. A panel consists on a plate surrounded
+! by stiffeners.
+!
+! This problem is represented in the marine industry through a shell, fixed in
+! two opposite sides (representing the connection with two consecutive girders
+! or other stiffeners) with a beam crossing it in the perdicular direction,
+! representing another stiffener which deflection is under stury. The sides
+! parallel to this beam are free to move, except by the rotation around the
+! Ox direction (parallel to the side of the shell itself). This rotation is
+! freed to 0 to represent the continuity of the hull. 
+!
+! This test case, together with the required software implementations, have
+! been elaborated within CoreMarine Solutions S.A. by Pablo Eleazar Merino
+! Alonso with the help of Mika Malinen and Peter Raback:
+!
+!    P.E. Merino Alonso: pel@core-marine.com
+!    Mika Malinen: mika.malinen@csc.fi
+!    Peter Raback: peter.raback@csc.fi
+! --------------------------------------------------------------------------
+
+Check Keywords "Warn" 
+
+Header
+  Mesh DB "." "mesh" 
+End
+
+Simulation
+  Max Output Level = 5
+  Coordinate System = Cartesian 3D
+  Simulation Type = Steady
+  Output Intervals = 1
+  Steady State Max Iterations = 1
+  Post File = "StiffenedPlate.vtu"
+End
+
+Body 1
+  Name = plate
+  Equation = 1
+  Material = 1
+  Body Force = 1
+End
+
+Body 2
+  Name = beam Ox
+  Equation = 1
+  Material = 2
+  Body Force = 2
+End
+
+Material 1
+  Name = "Plate material"
+  Youngs modulus = Real 2.1e+11
+  Poisson ratio = Real 0.3
+  Density = Real 7850.0
+End
+
+Material 2
+  Name = "Beam material Ox"
+  Youngs modulus = Real 2.0e+11
+  Shear modulus = Real 7.93e+10
+  Poisson ratio = Real 0.3
+
+  ! The density is used only in transient cases:
+  Density = Real 7850.0		
+
+  ! Specify basis where the cross section parameters are expressed:
+  Principal Direction 2(3) = Real 0.0 1.0 0.0
+
+  ! Specify I_k:
+  Second Moment of Area 2 = Real 1.9791666666666672e-07
+  Second Moment of Area 3 = Real 2.8579166666666665e-08
+
+  ! Specify A:
+  Cross Section Area = Real 0.00095
+
+  ! Specify J_T:
+  Torsional Constant = Real 2.264958333333334e-07
+
+  ! Specify offset:
+  Beam Axis Offset 3 = Real -0.033
+End
+
+! Volumetric forces:
+Body Force 1
+  Direction Of Outward Normal = Real 1.0
+  Thickness = Real 0.016
+  Body Force 1 = 0.0
+  Body Force 2 = 0.0
+  Body Force 3 = 3125000.0
+End
+
+Body Force 2
+  Body Force 1 = 0.0
+  Body Force 2 = 0.0
+  Body Force 3 = 0.0
+End
+
+Equation 1 :: Active Solvers(1) = 1
+
+Solver 1
+  Output File Append = Logical True
+
+  Equation = Shell Solver !"Timoshenko Beam Equation"
+  !Procedure = "BeamSolver3D" "TimoshenkoSolver"
+  Procedure = "ShellMultiSolver" "ShellSolver"
+
+  Nonlinear System Max Iterations = 1
+  Nonlinear System Convergence Tolerance = 1e-7
+
+  Linear System Solver = "Iterative" ! Memory allocation error found with Direct solver
+  Linear System Preconditioning = ILU2
+!  Linear System Max Iterations = 100000 !Added for iterative solver
+  Linear System Convergence Tolerance = 1.0e-9
+  Linear System Iterative Method = IDRS
+  Steady State Convergence Tolerance = 1e-9
+
+  Shear Stabilization Parameter = Real 1.0
+  Drilling Stabilization Parameter = Real 1.0
+  Calculate Stresses = Logical FALSE
+  !Compute Membrane Stress = Logical TRUE
+  Compute Total Stress = Logical FALSE
+  Top Side Stress = Logical FALSE
+  Bottom Side Stress = Logical TRUE
+  Membrane Only = Logical FALSE
+  Use DKT Triangle = Logical TRUE
+  Use SMITC Element = Logical FALSE
+  Use MITC3 Element = Logical FALSE
+  Use RMITC3 Element = Logical FALSE
+  Integration Points = Integer 3
+
+  Linear System Save = Logical True
+  Linear System Save Slot = String "after"
+  Linear System Save Solution = Logical True
+End
+
+Boundary Condition 1
+  Target Boundaries(2) = 1 3
+  U 1 = Real 0.0
+  U 2 = Real 0.0
+  U 3 = Real 0.0
+  Theta 1 = Real 0.0
+  Theta 2 = Real 0.0
+  Theta 3 = Real 0.0
+End
+
+Boundary Condition 2
+  Target Boundaries(2) = 2 4
+  ! We leave U 1 free to represent the fact that there is a set of contiguous panels
+  U 2 = Real 0.0
+  U 3 = Real 0.0
+  Theta 1 = Real 0.0
+  Theta 2 = Real 0.0
+  Theta 3 = Real 0.0
+End
+
+Boundary Condition 3
+  Target Boundaries(2) = 5 6
+  Theta 1 = Real 0.0
+End
+
+Solver 1 :: Reference Norm = Real 2.47121777E-03
+Solver 1 :: Reference Norm Tolerance = Real 1.0e-5
