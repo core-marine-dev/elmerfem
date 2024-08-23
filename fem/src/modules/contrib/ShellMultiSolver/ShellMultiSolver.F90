@@ -487,7 +487,9 @@
          at = CPUTime()
          CALL DefaultInitialize()
          CALL BulkAssembly()
+         CALL DefaultFinishBulkAssembly() !!!NEW
          CALL BCAssembly()
+          CALL DefaultFinishBoundaryAssembly() !!!NEW
          !CALL DefaultFinishBulkAssembly()
          CALL DefaultFinishAssembly()
          
