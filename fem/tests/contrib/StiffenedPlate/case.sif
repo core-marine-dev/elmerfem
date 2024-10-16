@@ -1,27 +1,34 @@
-! -------------------------------------------------------------------------
+! ------------------------------------------------------------------------------
 ! STIFFENED PLATE
 !
-! This test case represents a panel forming part of a ship hull structure.
-! In the context of the naval architecture, ship structures, particularly
-! hulls, are usually formed by panels. A panel consists on a plate surrounded
+! This test case represents a tipycal structural problem in the context of the
+! marine industry: a panel forming part of a ship hull structure.
+! In the context of the naval architecture, ship structures, particularly the
+! hull, are usually formed by panels. A panel consists on a plate surrounded
 ! by stiffeners.
 !
-! This problem is represented in the marine industry through a shell, fixed in
-! two opposite sides (representing the connection with two consecutive girders
-! or other stiffeners) with a beam crossing it in the perdicular direction,
-! representing another stiffener which deflection is under stury. The sides
-! parallel to this beam are free to move, except by the rotation around the
-! Ox direction (parallel to the side of the shell itself). This rotation is
-! freed to 0 to represent the continuity of the hull. 
+! This problem is represented in the finite element model using a shell, fixed
+! at two opposite sides (representing the connection with two consecutive
+! girders or other stiffeners) with a beam crossing it in the perdicular
+! direction, representing another stiffener which deflection is under study.
+! One of these sides is not fully fixed. The displacement along the x direction
+! is left free instead. This represents the fact that we are simulating a set of
+! contiguous panels, not an isolated one.
+!
+! On the other hand, the sides parallel to this beam are free to move, except
+! by the rotation around the Ox direction (parallel to the side of the shell
+! itself). This rotation is freed to 0 to represent the continuity of the hull. 
 !
 ! This test case, together with the required software implementations, have
-! been elaborated within CoreMarine Solutions S.A. by Pablo Eleazar Merino
-! Alonso with the help of Mika Malinen and Peter Raback:
+! been elaborated within Coremarine Solutions S.L. by Pablo Eleazar Merino
+! Alonso and Jose Luis Cercos Pita with the help of Mika Malinen and Peter
+! Raback, the last two from CSC-IT Center for Science:
 !
 !    P.E. Merino Alonso: pel@core-marine.com
+!    J.L. Cercos Pita
 !    Mika Malinen: mika.malinen@csc.fi
 !    Peter Raback: peter.raback@csc.fi
-! --------------------------------------------------------------------------
+! ------------------------------------------------------------------------------
 
 Check Keywords "Warn" 
 
